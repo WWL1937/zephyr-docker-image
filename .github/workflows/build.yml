@@ -29,10 +29,13 @@ jobs:
         run: |
           docker build -t zephyr-sdk:${{ steps.version.outputs.tag }} .
 
-      - name: Export image as tar.gz
+      - name: Export and split image
         run: |
+          mkdir -p ./release-parts
           docker save zephyr-sdk:${{ steps.version.outputs.tag }} \
-            | gzip > ${{ steps.version.outputs.image_name }}.tar.gz
+            | gzip \
+            | split -b 1024m - ./release-parts/zephyr-sdk.tar.gz.part_
+          ls -lh ./release-parts/
 
       - name: Create GitHub Release and upload artifact
         uses: softprops/action-gh-release@v2
@@ -41,5 +44,13 @@ jobs:
           name: "Zephyr SDK Docker Image ${{ steps.version.outputs.tag }}"
           body: |
             ## Zephyr Docker Image — ${{ steps.version.outputs.tag }}
-          files: ${{ steps.version.outputs.image_name }}.tar.gz
+
+            > Download all `zephyr-sdk.tar.gz.part_*` files into the same directory, then merge them into a single archive before importing into Docker.
+
+            Linux / macOS:
+            cat zephyr-sdk.tar.gz.part_* > zephyr-sdk.tar.gz
+
+            Windows (PowerShell):
+            Get-Content zephyr-sdk.tar.gz.part_* -AsByteStream | Set-Content zephyr-sdk.tar.gz -AsByteStream
+          files: ./release-parts/zephyr-sdk.tar.gz.part_*
           make_latest: true
