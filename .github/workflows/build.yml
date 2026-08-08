@@ -66,7 +66,7 @@ jobs:
           mkdir -p ./release-parts
           docker save zephyr-sdk:${{ steps.zephyr.outputs.version }} \
             | gzip \
-            | split -b 1024m - ./release-parts/zephyr-sdk.tar.gz.part_
+            | split -b 1024m --numeric-suffixes=1 --suffix-length=1 - ./release-parts/zephyr-sdk.tar.gz.part
           ls -lh ./release-parts/
 
       - name: Create GitHub Release and upload artifact
@@ -78,12 +78,12 @@ jobs:
           body: |
             ## Zephyr Docker Image — ${{ steps.zephyr.outputs.version }}
 
-            > Download all `zephyr-sdk.tar.gz.part_*` files into the same directory, then merge them into a single archive before importing into Docker.
+            > Download all `zephyr-sdk.tar.gz.part*` files into the same directory, then merge them into a single archive before importing into Docker.
 
             Linux / macOS:
-            cat zephyr-sdk.tar.gz.part_* > zephyr-sdk.tar.gz
+            cat zephyr-sdk.tar.gz.part* > zephyr-sdk.tar.gz
 
             Windows (PowerShell):
-            Get-Content zephyr-sdk.tar.gz.part_* -AsByteStream | Set-Content zephyr-sdk.tar.gz -AsByteStream
-          files: ./release-parts/zephyr-sdk.tar.gz.part_*
+            Get-Content zephyr-sdk.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk.tar.gz -AsByteStream
+          files: ./release-parts/zephyr-sdk.tar.gz.part*
           make_latest: true
