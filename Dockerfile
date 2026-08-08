@@ -3,11 +3,11 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN cat > /etc/apt/sources.list <<'EOF'
-    deb https://mirrors.aliyun.com/ubuntu/ noble main restricted universe multiverse
-    deb https://mirrors.aliyun.com/ubuntu/ noble-updates main restricted universe multiverse
-    deb https://mirrors.aliyun.com/ubuntu/ noble-backports main restricted universe multiverse
-    deb https://mirrors.aliyun.com/ubuntu/ noble-security main restricted universe multiverse
-    EOF
+deb https://mirrors.aliyun.com/ubuntu/ noble main restricted universe multiverse
+deb https://mirrors.aliyun.com/ubuntu/ noble-updates main restricted universe multiverse
+deb https://mirrors.aliyun.com/ubuntu/ noble-backports main restricted universe multiverse
+deb https://mirrors.aliyun.com/ubuntu/ noble-security main restricted universe multiverse
+EOF
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
