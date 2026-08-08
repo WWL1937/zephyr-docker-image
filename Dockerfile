@@ -1,13 +1,6 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN cat > /etc/apt/sources.list <<'EOF'
-deb https://mirrors.aliyun.com/ubuntu/ noble main restricted universe multiverse
-deb https://mirrors.aliyun.com/ubuntu/ noble-updates main restricted universe multiverse
-deb https://mirrors.aliyun.com/ubuntu/ noble-backports main restricted universe multiverse
-deb https://mirrors.aliyun.com/ubuntu/ noble-security main restricted universe multiverse
-EOF
-
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates apt-transport-https tree \
@@ -41,8 +34,7 @@ ENV ZEPHYR_SDK_INSTALL_DIR=/opt/zephyr-sdk
 ENV PATH="/opt/zephyrproject/.venv/bin:$PATH"
 
 RUN python3 -m venv /opt/zephyrproject/.venv
-RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple && \
-    pip install --no-cache-dir west
+RUN pip install --no-cache-dir west
 
 RUN west init -m https://github.com/zephyrproject-rtos/zephyr /opt/zephyrproject
 WORKDIR /opt/zephyrproject
