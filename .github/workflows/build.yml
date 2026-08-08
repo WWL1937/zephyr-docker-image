@@ -2,7 +2,7 @@ name: Zephyr Docker Build
 
 on:
   schedule:
-    - cron: '0 2 1 * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Get latest Zephyr version
+        id: zephyr
+        run: |
+          ZEPHYR_VERSION=$(curl -sf https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest \
+            | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+          echo "version=${ZEPHYR_VERSION}" >> $GITHUB_OUTPUT
+          echo "Latest Zephyr version: ${ZEPHYR_VERSION}"
+
+      - name: Check if already built
+        id: check
+        run: |
+          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.zephyr.outputs.version }}" \
+            || echo "404")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.zephyr.outputs.version }} already exists, skipping build."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "New version ${{ steps.zephyr.outputs.version }} detected, starting build."
+          fi
+
       - name: Free disk space
+        if: steps.check.outputs.skip == 'false'
         run: |
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /usr/share/dotnet
@@ -26,34 +50,33 @@ jobs:
           df -h
 
       - name: Set up Docker Buildx
+        if: steps.check.outputs.skip == 'false'
         uses: docker/setup-buildx-action@v3
 
-      - name: Generate version tag
-        id: version
-        run: |
-          VERSION=$(date +'%Y.%m')
-          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
-          echo "image_name=zephyr-sdk-${VERSION}" >> $GITHUB_OUTPUT
-
       - name: Build Docker image
+        if: steps.check.outputs.skip == 'false'
         run: |
-          docker build -t zephyr-sdk:${{ steps.version.outputs.tag }} .
+          docker build \
+            --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
+            -t zephyr-sdk:${{ steps.zephyr.outputs.version }} .
 
       - name: Export and split image
+        if: steps.check.outputs.skip == 'false'
         run: |
           mkdir -p ./release-parts
-          docker save zephyr-sdk:${{ steps.version.outputs.tag }} \
+          docker save zephyr-sdk:${{ steps.zephyr.outputs.version }} \
             | gzip \
             | split -b 1024m - ./release-parts/zephyr-sdk.tar.gz.part_
           ls -lh ./release-parts/
 
       - name: Create GitHub Release and upload artifact
+        if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Zephyr SDK Docker Image ${{ steps.version.outputs.tag }}"
+          tag_name: ${{ steps.zephyr.outputs.version }}
+          name: "Zephyr SDK Docker Image ${{ steps.zephyr.outputs.version }}"
           body: |
-            ## Zephyr Docker Image — ${{ steps.version.outputs.tag }}
+            ## Zephyr Docker Image — ${{ steps.zephyr.outputs.version }}
 
             > Download all `zephyr-sdk.tar.gz.part_*` files into the same directory, then merge them into a single archive before importing into Docker.
 

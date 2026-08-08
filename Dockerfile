@@ -36,7 +36,8 @@ ENV PATH="/opt/zephyrproject/.venv/bin:$PATH"
 RUN python3 -m venv /opt/zephyrproject/.venv
 RUN pip install --no-cache-dir west
 
-RUN west init -m https://github.com/zephyrproject-rtos/zephyr /opt/zephyrproject
+ARG ZEPHYR_VERSION=v4.4.2
+RUN west init -m https://github.com/zephyrproject-rtos/zephyr --mr ${ZEPHYR_VERSION} /opt/zephyrproject
 WORKDIR /opt/zephyrproject
 RUN west update --narrow && \
     find /opt/zephyrproject -name '.git' -type d -exec rm -rf {} + 2>/dev/null || true
