@@ -1,0 +1,45 @@
+name: Zephyr Docker Build
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate version tag
+        id: version
+        run: |
+          VERSION=$(date +'%Y.%m')
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "image_name=zephyr-sdk-${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -t zephyr-sdk:${{ steps.version.outputs.tag }} .
+
+      - name: Export image as tar.gz
+        run: |
+          docker save zephyr-sdk:${{ steps.version.outputs.tag }} \
+            | gzip > ${{ steps.version.outputs.image_name }}.tar.gz
+
+      - name: Create GitHub Release and upload artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Zephyr SDK Docker Image ${{ steps.version.outputs.tag }}"
+          body: |
+            ## Zephyr Docker Image — ${{ steps.version.outputs.tag }}
+          files: ${{ steps.version.outputs.image_name }}.tar.gz
+          make_latest: true
