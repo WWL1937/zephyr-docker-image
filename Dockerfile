@@ -1,4 +1,3 @@
-ARG GITHUB_TOKEN=***
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -56,12 +55,7 @@ RUN west packages pip --install && \
 
 WORKDIR /opt/zephyrproject/zephyr
 
-ARG GITHUB_TOKEN
-RUN if [ -n "$GITHUB_TOKEN" ]; then \
-        yes | west sdk install -t arm-zephyr-eabi -d /opt/zephyr-sdk --personal-access-token "$GITHUB_TOKEN"; \
-    else \
-        yes | west sdk install -t arm-zephyr-eabi -d /opt/zephyr-sdk; \
-    fi && \
+RUN yes | west sdk install -t arm-zephyr-eabi -d /opt/zephyr-sdk && \
     rm -rf /tmp/* ~/.cache/*
 
 USER root
