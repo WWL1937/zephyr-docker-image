@@ -12,7 +12,7 @@ What's Included
 | Python         | python3 + venv + west                       |
 | Device support | dfu-util, device-tree-compiler              |
 | SSH server     | openssh-server (port 22)                    |
-| Utilities      | git, vim, tree, net-tools                   |
+| Utilities      | git, vim, tree, net-tools, curl, iputils-ping, unzip |
 
 # Quick Start
 
