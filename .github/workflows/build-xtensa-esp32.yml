@@ -11,13 +11,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get latest Zephyr version
         id: zephyr
         run: |
-          ZEPHYR_VERSION=$(curl -sf https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest \
+          ZEPHYR_VERSION=$(curl -sf -H "Authorization: ****** secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest \
             | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+          if [ -z "$ZEPHYR_VERSION" ]; then
+            echo "Failed to resolve latest Zephyr version" >&2
+            exit 1
+          fi
           echo "version=${ZEPHYR_VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${ZEPHYR_VERSION}-xtensa-esp32" >> $GITHUB_OUTPUT
           echo "Latest Zephyr version: ${ZEPHYR_VERSION}"
@@ -50,7 +55,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.check.outputs.skip == 'false'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image
         if: steps.check.outputs.skip == 'false'

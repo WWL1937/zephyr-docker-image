@@ -1,4 +1,4 @@
-name: Zephyr Docker Build
+name: Zephyr Docker Build (ARM)
 
 on:
   workflow_dispatch:
@@ -11,14 +11,20 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get latest Zephyr version
         id: zephyr
         run: |
-          ZEPHYR_VERSION=$(curl -sf https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest \
+          ZEPHYR_VERSION=$(curl -sf -H "Authorization: ****** secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest \
             | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+          if [ -z "$ZEPHYR_VERSION" ]; then
+            echo "Failed to resolve latest Zephyr version" >&2
+            exit 1
+          fi
           echo "version=${ZEPHYR_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${ZEPHYR_VERSION}-arm" >> $GITHUB_OUTPUT
           echo "Latest Zephyr version: ${ZEPHYR_VERSION}"
 
       - name: Check if already built
@@ -26,14 +32,14 @@ jobs:
         run: |
           HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.zephyr.outputs.version }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.zephyr.outputs.tag }}" \
             || echo "404")
           if [ "$HTTP_CODE" = "200" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Release ${{ steps.zephyr.outputs.version }} already exists, skipping build."
+            echo "Release ${{ steps.zephyr.outputs.tag }} already exists, skipping build."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
-            echo "New version ${{ steps.zephyr.outputs.version }} detected, starting build."
+            echo "New version ${{ steps.zephyr.outputs.tag }} detected, starting build."
           fi
 
       - name: Free disk space
@@ -49,7 +55,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.check.outputs.skip == 'false'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image
         if: steps.check.outputs.skip == 'false'
@@ -57,32 +63,32 @@ jobs:
           docker build \
             -f Dockerfile.arm \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
-            -t zephyr-sdk:${{ steps.zephyr.outputs.version }} .
+            -t zephyr-sdk-arm:${{ steps.zephyr.outputs.version }} .
 
       - name: Export and split image
         if: steps.check.outputs.skip == 'false'
         run: |
           mkdir -p ./release-parts
-          docker save zephyr-sdk:${{ steps.zephyr.outputs.version }} \
+          docker save zephyr-sdk-arm:${{ steps.zephyr.outputs.version }} \
             | gzip \
-            | split -b 1024m --numeric-suffixes=1 --suffix-length=1 - ./release-parts/zephyr-sdk.tar.gz.part
+            | split -b 1024m --numeric-suffixes=1 --suffix-length=1 - ./release-parts/zephyr-sdk-arm.tar.gz.part
           ls -lh ./release-parts/
 
       - name: Create GitHub Release and upload artifact
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.zephyr.outputs.version }}
-          name: "Zephyr SDK Docker Image ${{ steps.zephyr.outputs.version }}"
+          tag_name: ${{ steps.zephyr.outputs.tag }}
+          name: "Zephyr SDK Docker Image ${{ steps.zephyr.outputs.version }} (ARM)"
           body: |
-            ## Zephyr Docker Image — ${{ steps.zephyr.outputs.version }}
+            ## Zephyr Docker Image — ${{ steps.zephyr.outputs.version }} (ARM, `arm-zephyr-eabi` toolchain)
 
-            > Download all `zephyr-sdk.tar.gz.part*` files into the same directory, then merge them into a single archive before importing into Docker.
+            > Download all `zephyr-sdk-arm.tar.gz.part*` files into the same directory, then merge them into a single archive before importing into Docker.
 
             Linux / macOS:
-            cat zephyr-sdk.tar.gz.part* > zephyr-sdk.tar.gz
+            cat zephyr-sdk-arm.tar.gz.part* > zephyr-sdk-arm.tar.gz
 
             Windows (PowerShell):
-            Get-Content zephyr-sdk.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk.tar.gz -AsByteStream
-          files: ./release-parts/zephyr-sdk.tar.gz.part*
+            Get-Content zephyr-sdk-arm.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk-arm.tar.gz -AsByteStream
+          files: ./release-parts/zephyr-sdk-arm.tar.gz.part*
           make_latest: true
