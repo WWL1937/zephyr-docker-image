@@ -55,6 +55,7 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: |
           docker build \
+            -f Dockerfile.arm \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
             -t zephyr-sdk:${{ steps.zephyr.outputs.version }} .
 

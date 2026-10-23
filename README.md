@@ -1,13 +1,21 @@
 # What is this
 
-This is a Docker image based on Ubuntu 24.04 with a complete [Zephyr RTOS](https://zephyrproject.org/) development environment pre-installed, including the west build tool, ARM toolchain, and all required dependencies. The image is automatically built and published to GitHub Releases whenever a new Zephyr version is released, so you always have an up-to-date environment ready to use.
+This is a Docker image based on Ubuntu 24.04 with a complete [Zephyr RTOS](https://zephyrproject.org/) development environment pre-installed, including the west build tool, a Zephyr SDK toolchain, and all required dependencies. The images are automatically built and published to GitHub Releases whenever a new Zephyr version is released, so you always have an up-to-date environment ready to use.
+
+Three variants are built, each with its own `Dockerfile` and workflow, differing only in the Zephyr SDK toolchain installed:
+
+| Variant | Dockerfile           | Workflow                                | Toolchain                          | Release tag           |
+| ------- | -------------------- | ---------------------------------------- | ----------------------------------- | ---------------------- |
+| ARM     | `Dockerfile.arm`     | `.github/workflows/build-arm.yml`       | `arm-zephyr-eabi`                  | `<version>`            |
+| Xtensa ESP32 | `Dockerfile.xtensa-esp32` | `.github/workflows/build-xtensa-esp32.yml` | `xtensa-espressif_esp32_zephyr-elf` | `<version>-xtensa-esp32` |
+| RISC-V  | `Dockerfile.riscv`   | `.github/workflows/build-riscv.yml`     | `riscv64-zephyr-elf`               | `<version>-riscv`      |
 
 What's Included
 
 | Component      | Details                                     |
 | -------------- | ------------------------------------------- |
 | Base OS        | Ubuntu 24.04                                |
-| Zephyr SDK     | ARM toolchain (`arm-zephyr-eabi`)         |
+| Zephyr SDK     | See toolchain table above                   |
 | Build tools    | cmake, ninja, gperf, ccache, make, gcc, g++ |
 | Python         | python3 + venv + west                       |
 | Device support | dfu-util, device-tree-compiler              |
