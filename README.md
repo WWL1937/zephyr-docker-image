@@ -6,7 +6,7 @@ Three variants are built, each with its own `Dockerfile` and workflow, differing
 
 | Variant | Dockerfile           | Workflow                                | Toolchain                          | Release tag           |
 | ------- | -------------------- | ---------------------------------------- | ----------------------------------- | ---------------------- |
-| ARM     | `Dockerfile.arm`     | `.github/workflows/build-arm.yml`       | `arm-zephyr-eabi`                  | `<version>`            |
+| ARM     | `Dockerfile.arm`     | `.github/workflows/build-arm.yml`       | `arm-zephyr-eabi`                  | `<version>-arm`            |
 | Xtensa ESP32 | `Dockerfile.xtensa-esp32` | `.github/workflows/build-xtensa-esp32.yml` | `xtensa-espressif_esp32_zephyr-elf` | `<version>-xtensa-esp32` |
 | RISC-V  | `Dockerfile.riscv`   | `.github/workflows/build-riscv.yml`     | `riscv64-zephyr-elf`               | `<version>-riscv`      |
 
@@ -26,16 +26,16 @@ What's Included
 
 ## Import from GitHub Release
 
-Each release contains the Docker image split into multiple 1 GB parts. Download **all** `zephyr-sdk.tar.gz.part*` files from the [Releases](../../releases) page into the same directory, then follow the steps below.
+Each release contains the Docker image split into multiple 1 GB parts (artifact name depends on the variant, e.g. `zephyr-sdk-arm.tar.gz.part*`, `zephyr-sdk-xtensa-esp32.tar.gz.part*`, `zephyr-sdk-riscv.tar.gz.part*`). Download **all** parts for your chosen variant from the [Releases](../../releases) page into the same directory, then follow the steps below.
 
 Linux / macOS
 
 ```bash
-# Merge parts into a single archive
-cat zephyr-sdk.tar.gz.part* > zephyr-sdk.tar.gz
+# Merge parts into a single archive (example: ARM variant)
+cat zephyr-sdk-arm.tar.gz.part* > zephyr-sdk-arm.tar.gz
 
 # Import into Docker
-docker load < zephyr-sdk.tar.gz
+docker load < zephyr-sdk-arm.tar.gz
 ```
 
 ## Start container
@@ -45,7 +45,7 @@ docker-compose.yml
 ```yaml
 services:
   wwl:
-    image: zephyr-sdk:<version>     # replace with the actual version tag, e.g. zephyr-sdk:v4.4.2
+    image: zephyr-sdk-arm:<version>     # replace with the actual version tag, e.g. zephyr-sdk-arm:v4.4.2
     container_name: wwl
     environment:
       USER_PASSWORD: wwl
@@ -58,7 +58,7 @@ services:
     restart: unless-stopped
 ```
 
-> Replace `<version>` with the tag shown after `docker images`, e.g. `zephyr-sdk:v4.4.2`.
+> Replace `<version>` with the tag shown after `docker images`, e.g. `zephyr-sdk-arm:v4.4.2`.
 
 Start the container:
 
