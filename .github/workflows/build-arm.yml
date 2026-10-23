@@ -59,8 +59,11 @@ jobs:
 
       - name: Build Docker image
         if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN_SECRET: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker build \
+            --secret id=gh_token,env=GH_TOKEN_SECRET \
             -f Dockerfile.arm \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
             -t zephyr-sdk-arm:${{ steps.zephyr.outputs.version }} .
