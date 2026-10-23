@@ -1,0 +1,49 @@
+version: '1.0'
+name: zephyr-build-xtensa-esp32
+displayName: Zephyr Docker Build (Xtensa ESP32)
+triggers:
+  trigger: manual
+stages:
+  - name: prepare
+    displayName: Resolve Zephyr version
+    trigger: auto
+    steps:
+      - step: build@python
+        name: prepare_xtensa_esp32
+        displayName: Prepare Xtensa ESP32 Dockerfile
+        pythonVersion: '3.9'
+        commands:
+          - python3 ci/gitee-release.py prepare xtensa-esp32
+        artifacts:
+          - name: XTENSA_DOCKERFILE
+            path:
+              - ./Dockerfile.xtensa-esp32
+  - name: build
+    displayName: Build and push intermediate image
+    trigger: auto
+    steps:
+      - step: build@docker
+        name: build_xtensa_esp32
+        displayName: Build Xtensa ESP32 image
+        type: cert
+        certificate: ${REGISTRY_CERTIFICATE}
+        tag: ${IMAGE_NAMESPACE}/zephyr-sdk-xtensa-esp32:${RESOLVED_VERSION}
+        dockerfile: ./Dockerfile.xtensa-esp32
+        context: ''
+        artifacts:
+          - ${XTENSA_DOCKERFILE}
+        isCache: true
+  - name: release
+    displayName: Publish Gitee Release
+    trigger: auto
+    steps:
+      - step: build@gcc
+        name: release_xtensa_esp32
+        displayName: Export and upload Xtensa ESP32 image
+        gccVersion: '10.3'
+        commands:
+          - |
+            set -eu
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends skopeo python3 curl
+            python3 ci/gitee-release.py publish xtensa-esp32

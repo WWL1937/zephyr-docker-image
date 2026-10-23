@@ -1,0 +1,49 @@
+version: '1.0'
+name: zephyr-build-arm
+displayName: Zephyr Docker Build (ARM)
+triggers:
+  trigger: manual
+stages:
+  - name: prepare
+    displayName: Resolve Zephyr version
+    trigger: auto
+    steps:
+      - step: build@python
+        name: prepare_arm
+        displayName: Prepare ARM Dockerfile
+        pythonVersion: '3.9'
+        commands:
+          - python3 ci/gitee-release.py prepare arm
+        artifacts:
+          - name: ARM_DOCKERFILE
+            path:
+              - ./Dockerfile.arm
+  - name: build
+    displayName: Build and push intermediate image
+    trigger: auto
+    steps:
+      - step: build@docker
+        name: build_arm
+        displayName: Build ARM image
+        type: cert
+        certificate: ${REGISTRY_CERTIFICATE}
+        tag: ${IMAGE_NAMESPACE}/zephyr-sdk-arm:${RESOLVED_VERSION}
+        dockerfile: ./Dockerfile.arm
+        context: ''
+        artifacts:
+          - ${ARM_DOCKERFILE}
+        isCache: true
+  - name: release
+    displayName: Publish Gitee Release
+    trigger: auto
+    steps:
+      - step: build@gcc
+        name: release_arm
+        displayName: Export and upload ARM image
+        gccVersion: '10.3'
+        commands:
+          - |
+            set -eu
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends skopeo python3 curl
+            python3 ci/gitee-release.py publish arm

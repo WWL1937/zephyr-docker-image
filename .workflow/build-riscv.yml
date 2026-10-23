@@ -1,0 +1,49 @@
+version: '1.0'
+name: zephyr-build-riscv
+displayName: Zephyr Docker Build (RISC-V)
+triggers:
+  trigger: manual
+stages:
+  - name: prepare
+    displayName: Resolve Zephyr version
+    trigger: auto
+    steps:
+      - step: build@python
+        name: prepare_riscv
+        displayName: Prepare RISC-V Dockerfile
+        pythonVersion: '3.9'
+        commands:
+          - python3 ci/gitee-release.py prepare riscv
+        artifacts:
+          - name: RISCV_DOCKERFILE
+            path:
+              - ./Dockerfile.riscv
+  - name: build
+    displayName: Build and push intermediate image
+    trigger: auto
+    steps:
+      - step: build@docker
+        name: build_riscv
+        displayName: Build RISC-V image
+        type: cert
+        certificate: ${REGISTRY_CERTIFICATE}
+        tag: ${IMAGE_NAMESPACE}/zephyr-sdk-riscv:${RESOLVED_VERSION}
+        dockerfile: ./Dockerfile.riscv
+        context: ''
+        artifacts:
+          - ${RISCV_DOCKERFILE}
+        isCache: true
+  - name: release
+    displayName: Publish Gitee Release
+    trigger: auto
+    steps:
+      - step: build@gcc
+        name: release_riscv
+        displayName: Export and upload RISC-V image
+        gccVersion: '10.3'
+        commands:
+          - |
+            set -eu
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends skopeo python3 curl
+            python3 ci/gitee-release.py publish riscv
