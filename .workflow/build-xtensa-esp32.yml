@@ -3,111 +3,135 @@ name: zephyr-build-xtensa-esp32
 displayName: Zephyr Docker Build (Xtensa ESP32)
 triggers:
   trigger: manual
+strategy:
+  blocking: true
 stages:
-  - name: prepare
-    displayName: Resolve Zephyr version
-    trigger: auto
-    steps:
-      - step: build@python
-        name: prepare_xtensa_esp32
-        displayName: Prepare Xtensa ESP32 Dockerfile
-        pythonVersion: '3.9'
-        commands:
-          - |
-            set -eu
-            cd "$WORKSPACE"
-            python3 - <<'PY'
-            import json
-            import os
-            from pathlib import Path
-            import re
-            from urllib.request import urlopen
-
-            for name in ("REGISTRY_CERTIFICATE", "REGISTRY_HOST", "IMAGE_NAMESPACE",
-                         "REGISTRY_USERNAME", "REGISTRY_PASSWORD",
-                         "RELEASE_REPOSITORY", "RELEASE_TOKEN"):
-                if not os.environ.get(name, "").strip():
-                    raise ValueError(f"Missing pipeline parameter: {name}")
-            version = os.environ.get("ZEPHYR_VERSION", "").strip()
-            if not version:
-                with urlopen("https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest",
-                             timeout=120) as response:
-                    version = json.load(response)["tag_name"]
-            if not re.fullmatch(r"v\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?", version):
-                raise ValueError("ZEPHYR_VERSION must be a version tag, e.g. v4.4.2")
-            path = Path("Dockerfile.xtensa-esp32")
-            text, count = re.subn(r"^ARG ZEPHYR_VERSION=.*$",
-                                 f"ARG ZEPHYR_VERSION={version}",
-                                 path.read_text(), flags=re.MULTILINE)
-            if count != 1:
-                raise ValueError("Expected exactly one ZEPHYR_VERSION argument")
-            path.write_text(text)
-            with Path("GITEE_PARAMS").open("a") as params:
-                params.write(f"RESOLVED_VERSION={version}\n")
-            print(f"Building Zephyr {version}")
-            PY
-        artifacts:
-          - name: XTENSA_DOCKERFILE
-            path:
-              - ./Dockerfile.xtensa-esp32
   - name: build
-    displayName: Build and push intermediate image
-    trigger: auto
-    steps:
-      - step: build@docker
-        name: build_xtensa_esp32
-        displayName: Build Xtensa ESP32 image
-        type: cert
-        certificate: ${REGISTRY_CERTIFICATE}
-        tag: ${IMAGE_NAMESPACE}/zephyr-sdk-xtensa-esp32:${RESOLVED_VERSION}
-        dockerfile: ./Dockerfile.xtensa-esp32
-        context: ''
-        artifacts:
-          - ${XTENSA_DOCKERFILE}
-        isCache: true
-  - name: release
-    displayName: Publish Gitee Release
+    displayName: Build and publish
     trigger: auto
     steps:
       - step: build@gcc
-        name: release_xtensa_esp32
-        displayName: Export and upload Xtensa ESP32 image
+        name: build_xtensa_esp32
+        displayName: Build Xtensa ESP32 image and publish Gitee Release
         gccVersion: '10.3'
         commands:
           - |
+            # The plugin runs with xtrace; disable it so secrets never reach the log.
+            set +x
             set -eu
             cd "$WORKSPACE"
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends skopeo python3 curl
-            python3 - <<'PY'
-            import base64
+            variant=xtensa-esp32
+            image="zephyr-sdk-$variant"
+
+            require() {
+                eval "value=\${$1:-}"
+                if [ -z "$value" ]; then
+                    echo "Missing pipeline parameter: $1" >&2
+                    exit 1
+                fi
+                printf '%s' "$value"
+            }
+
+            RELEASE_TOKEN=$(require RELEASE_TOKEN)
+            RELEASE_REPOSITORY=$(require RELEASE_REPOSITORY)
+            export RELEASE_TOKEN RELEASE_REPOSITORY
+
+            if command -v sudo >/dev/null 2>&1; then
+                SUDO=sudo
+            else
+                SUDO=
+            fi
+
+            version="${ZEPHYR_VERSION:-}"
+            if [ -z "$version" ]; then
+                version=$(curl -fsS --max-time 60 \
+                    https://api.github.com/repos/zephyrproject-rtos/zephyr/releases/latest \
+                    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+            fi
+            if ! printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.-]+)?$'; then
+                echo "ZEPHYR_VERSION must be a version tag, e.g. v4.4.2" >&2
+                exit 1
+            fi
+            tag="$version-$variant"
+
+            # Check before the expensive build, not after.
+            if curl -fsS --max-time 30 -o /dev/null --get \
+                --data-urlencode "access_token=$RELEASE_TOKEN" \
+                "https://gitee.com/api/v5/repos/$RELEASE_REPOSITORY/releases/tags/$tag"; then
+                echo "Release $tag already exists; skipping."
+                exit 0
+            fi
+
+            echo "Building Zephyr $version ($variant)"
+            $SUDO apt-get update -qq
+            $SUDO apt-get install -y --no-install-recommends buildah curl >/dev/null
+
+            work=$(mktemp -d)
+            trap 'rm -rf "$work"' EXIT
+
+            secret_arg=
+            if [ -n "${GITHUB_TOKEN:-}" ]; then
+                printf '%s' "$GITHUB_TOKEN" > "$work/gh_token"
+                chmod 600 "$work/gh_token"
+                secret_arg="--secret id=gh_token,src=$work/gh_token"
+            fi
+
+            build_args="--build-arg ZEPHYR_VERSION=$version"
+            if [ -n "${BASE_IMAGE:-}" ]; then
+                build_args="$build_args --build-arg BASE_IMAGE=$BASE_IMAGE"
+            fi
+            if [ -n "${APT_MIRROR:-}" ]; then
+                build_args="$build_args --build-arg APT_MIRROR=$APT_MIRROR"
+            fi
+
+            # No Docker daemon in Gitee cloud: buildah builds and exports directly.
+            $SUDO buildah --storage-driver=vfs bud --isolation chroot $secret_arg $build_args \
+                -f "Dockerfile.$variant" -t "$image:$version" .
+
+            $SUDO buildah --storage-driver=vfs push "$image:$version" \
+                "docker-archive:$work/image.tar:$image:$version"
+            $SUDO buildah --storage-driver=vfs rmi "$image:$version" >/dev/null 2>&1 || true
+
+            if [ -n "$SUDO" ]; then
+                $SUDO chown -R "$(id -u):$(id -g)" "$work"
+            fi
+
+            # pipefail prevents publishing a truncated archive when gzip fails.
+            bash -o pipefail -c \
+                'gzip -c "$1" | split -b 95M -d -a 4 --numeric-suffixes=1 - "$2/image.tar.gz.part"' \
+                export "$work/image.tar"
+            rm -f "$work/image.tar"
+            ( cd "$work" && sha256sum image.tar.gz.part* > SHA256SUMS )
+            ls -lh "$work"
+
+            RELEASE_WORK="$work" VARIANT="$variant" VERSION="$version" python3 - <<'PY'
             import json
             import os
-            from pathlib import Path
+            import shutil
             import subprocess
-            import tempfile
+            from pathlib import Path
             from urllib.error import HTTPError
             from urllib.parse import quote, urlencode
             from urllib.request import Request, urlopen
 
-            def required(name):
-                value = os.environ.get(name, "").strip()
-                if not value:
-                    raise ValueError(f"Missing pipeline parameter: {name}")
-                return value
-
-            token = required("RELEASE_TOKEN")
-            repository = required("RELEASE_REPOSITORY").split("/")
+            token = os.environ["RELEASE_TOKEN"]
+            repository = os.environ["RELEASE_REPOSITORY"].strip().split("/")
             if len(repository) != 2 or not all(repository):
-                raise ValueError("RELEASE_REPOSITORY must be owner/repo")
+                raise SystemExit("RELEASE_REPOSITORY must be owner/repo")
             base = "https://gitee.com/api/v5/repos/" + "/".join(
                 quote(part, safe="") for part in repository)
+            variant = os.environ["VARIANT"]
+            version = os.environ["VERSION"]
+            image = f"zephyr-sdk-{variant}"
+            tag = f"{version}-{variant}"
+            directory = Path(os.environ["RELEASE_WORK"])
+
 
             def api(path, data=None, method=None):
                 url = base + path
+                payload = None
                 if data is None:
                     url += "?" + urlencode({"access_token": token})
-                    payload = None
                 else:
                     payload = json.dumps(dict(data, access_token=token)).encode()
                 request = Request(url, data=payload, method=method,
@@ -116,72 +140,54 @@ stages:
                     with urlopen(request, timeout=120) as response:
                         return json.load(response)
                 except HTTPError as error:
+                    # Never include the request URL: it carries the access token.
                     raise RuntimeError(f"Gitee API failed with HTTP {error.code}") from None
 
-            variant = "xtensa-esp32"
-            version = required("RESOLVED_VERSION")
-            image = f"zephyr-sdk-{variant}"
-            tag = f"{version}-{variant}"
-            local_image = f"{image}:{version}"
-            host = required("REGISTRY_HOST")
-            remote_image = f"{host}/{required('IMAGE_NAMESPACE')}/{local_image}"
-            commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-            with tempfile.TemporaryDirectory(prefix="gitee-release-") as work:
-                directory = Path(work)
-                authfile = directory / "auth.json"
-                auth = base64.b64encode(
-                    f"{required('REGISTRY_USERNAME')}:{required('REGISTRY_PASSWORD')}".encode()
-                ).decode()
-                authfile.write_text(json.dumps({"auths": {host: {"auth": auth}}}))
-                authfile.chmod(0o600)
-                archive = directory / "image.tar"
+
+            try:
+                api("/releases/tags/" + quote(tag, safe=""))
+            except RuntimeError as error:
+                if "HTTP 404" not in str(error):
+                    raise
+            else:
+                print(f"Release {tag} already exists; nothing to upload.")
+                shutil.rmtree(directory, ignore_errors=True)
+                raise SystemExit(0)
+
+            files = sorted(directory.glob(f"{image}.tar.gz.part*"))
+            if not files or any(path.stat().st_size == 0 for path in files):
+                raise SystemExit("Exported image archive is empty")
+            files.append(directory / "SHA256SUMS")
+
+            body = (f"Download all `{image}.tar.gz.part*` files and `SHA256SUMS`.\n\n"
+                    f"```bash\nsha256sum -c SHA256SUMS\n"
+                    f"cat {image}.tar.gz.part* | docker load\n```\n")
+            release_data = {
+                "tag_name": tag,
+                "name": f"Zephyr SDK Docker Image {version} ({variant})",
+                "body": body,
+                "target_commitish": subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True).strip(),
+                "prerelease": True,
+            }
+            release = api("/releases", release_data)
+
+            tokenfile = directory / "token"
+            tokenfile.write_text(token)
+            tokenfile.chmod(0o600)
+            for path in files:
                 subprocess.run([
-                    "skopeo", "copy", "--src-authfile", str(authfile),
-                    "--override-os", "linux", "--override-arch", "amd64",
-                    f"docker://{remote_image}", f"docker-archive:{archive}:{local_image}",
+                    "curl", "--fail", "--silent", "--show-error",
+                    "--connect-timeout", "30", "--max-time", "1800",
+                    "--output", str(directory / "upload-response.json"),
+                    "--form", f"access_token=<{tokenfile}",
+                    "--form", f"file=@{path}",
+                    f"{base}/releases/{release['id']}/attach_files",
                 ], check=True)
-                # pipefail prevents publishing truncated archives if gzip fails.
-                prefix = str(directory / f"{image}.tar.gz.part")
-                subprocess.run([
-                    "bash", "-o", "pipefail", "-c",
-                    'gzip -c "$1" | split -b 95M -d -a 4 --numeric-suffixes=1 - "$2"',
-                    "export", str(archive), prefix,
-                ], check=True)
-                archive.unlink()
-                parts = sorted(directory.glob(f"{image}.tar.gz.part*"))
-                if not parts or any(path.stat().st_size == 0 for path in parts):
-                    raise ValueError("Exported image archive is empty")
-                checksums = directory / "SHA256SUMS"
-                with checksums.open("wb") as output:
-                    subprocess.run(["sha256sum"] + [path.name for path in parts],
-                                   cwd=directory, stdout=output, check=True)
-                files = parts + [checksums]
-                print(f"Uploading {sum(path.stat().st_size for path in files)} bytes; "
-                      "ensure sufficient Gitee attachment quota.", flush=True)
-                release_data = {
-                    "tag_name": tag,
-                    "name": f"Zephyr SDK Docker Image {version} ({variant})",
-                    "body": f"Download all `{image}.tar.gz.part*` files and `SHA256SUMS`.\n\n"
-                            f"```bash\nsha256sum -c SHA256SUMS\n"
-                            f"cat {image}.tar.gz.part* | docker load\n```\n",
-                    "target_commitish": commit,
-                    "prerelease": True,
-                }
-                release = api("/releases", release_data)
-                tokenfile = directory / "token"
-                tokenfile.write_text(token)
-                tokenfile.chmod(0o600)
-                for path in files:
-                    subprocess.run([
-                        "curl", "--fail", "--silent", "--show-error",
-                        "--connect-timeout", "30", "--max-time", "1800",
-                        "--output", str(directory / "upload-response.json"),
-                        "--form", f"access_token=<{tokenfile}",
-                        "--form", f"file=@{path}",
-                        f"{base}/releases/{release['id']}/attach_files",
-                    ], check=True)
-                release_data.pop("target_commitish")
-                release_data["prerelease"] = False
-                api(f"/releases/{release['id']}", release_data, method="PATCH")
-                print(f"Published {tag}")
+
+            release_data.pop("target_commitish")
+            release_data["prerelease"] = False
+            api(f"/releases/{release['id']}", release_data, method="PATCH")
+            shutil.rmtree(directory, ignore_errors=True)
+            print(f"Published {tag}")
             PY

@@ -1,33 +1,70 @@
 version: '1.0'
 name: probe-cloud-build
-displayName: Probe daemonless build in Gitee cloud
+displayName: Probe cloud network and buildah
 triggers:
   trigger: manual
 stages:
   - name: probe
-    displayName: Probe buildah
+    displayName: Probe environment
     trigger: auto
     steps:
       - step: build@gcc
-        name: probe_buildah
-        displayName: Check buildah and registry access
+        name: probe_cloud
+        displayName: Check disk, hosts, registries and buildah secrets
         gccVersion: '10.3'
         commands:
           - |
-            set -eu
-            if sudo -n true 2>/dev/null; then S="sudo -n"; else S=""; fi
-            echo "user=$(id -un) sudo=${S:-none}"
-            $S apt-get update -qq
-            $S apt-get install -y --no-install-recommends buildah
-            buildah --version
-            curl -sS -o /dev/null -w "docker.io HTTP %{http_code}\n" \
-              --max-time 20 https://registry-1.docker.io/v2/ || true
-            curl -sS -o /dev/null -w "github HTTP %{http_code}\n" \
-              --max-time 20 https://api.github.com/ || true
-            printf 'FROM alpine:3.19\nRUN echo ok > /tmp/probe\n' > /tmp/Dockerfile.probe
-            $S buildah --storage-driver=vfs bud --isolation chroot \
-              -t probe:1 -f /tmp/Dockerfile.probe /tmp
-            $S buildah --storage-driver=vfs push probe:1 \
-              docker-archive:/tmp/probe.tar:probe:1
-            ls -lh /tmp/probe.tar
-            echo PROBE_OK
+            set +x
+            set -u
+            if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi
+            $SUDO apt-get update -qq
+            $SUDO apt-get install -y --no-install-recommends skopeo curl >/dev/null
+
+            echo "=== disk / cpu / memory ==="
+            df -h / /tmp 2>/dev/null || true
+            nproc
+            free -m | head -2
+
+            echo "=== host reachability (HTTP code) ==="
+            for host in archive.ubuntu.com security.ubuntu.com mirrors.aliyun.com \
+                        pypi.org files.pythonhosted.org github.com codeload.github.com \
+                        objects.githubusercontent.com api.github.com; do
+                code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+                    "https://$host/" 2>/dev/null || echo 000)
+                echo "$host => $code"
+            done
+
+            echo "=== container registry mirrors ==="
+            working=
+            for mirror in docker.m.daocloud.io docker.1ms.run docker.xuanyuan.me \
+                          dockerpull.org docker.unsee.tech hub.rat.dev docker.1panel.live \
+                          dockerproxy.net registry.cn-hangzhou.aliyuncs.com \
+                          registry.cn-beijing.aliyuncs.com; do
+                if timeout 25 skopeo inspect --retry-times 0 \
+                    "docker://$mirror/library/ubuntu:24.04" >/dev/null 2>&1; then
+                    echo "OK   $mirror"
+                    if [ -z "$working" ]; then working=$mirror; fi
+                else
+                    echo "FAIL $mirror"
+                fi
+            done
+
+            echo "=== buildah with the first working mirror ==="
+            if [ -z "$working" ]; then
+                echo "No reachable Docker Hub mirror; cloud build cannot pull ubuntu:24.04."
+                echo "PROBE_DONE"
+                exit 0
+            fi
+            echo "using $working"
+            mkdir -p /tmp/probectl
+            printf 'ok' > /tmp/probectl/t
+            printf 'FROM %s/library/ubuntu:24.04\nRUN --mount=type=secret,id=t,mode=0444 test -s /run/secrets/t && echo SECRET_MOUNT_OK\n' \
+                "$working" > /tmp/Dockerfile.probe
+            if buildah --storage-driver=vfs bud --isolation chroot \
+                --secret id=t,src=/tmp/probectl/t -f /tmp/Dockerfile.probe /tmp/probectl; then
+                echo "BUILD_SECRET_OK"
+            else
+                echo "BUILD_SECRET_FAILED"
+            fi
+            echo "Use BASE_IMAGE=$working/library/ubuntu:24.04 and APT_MIRROR=mirrors.aliyun.com"
+            echo "PROBE_DONE"
