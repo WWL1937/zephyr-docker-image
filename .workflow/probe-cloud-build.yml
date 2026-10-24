@@ -1,0 +1,33 @@
+version: '1.0'
+name: probe-cloud-build
+displayName: Probe daemonless build in Gitee cloud
+triggers:
+  trigger: manual
+stages:
+  - name: probe
+    displayName: Probe buildah
+    trigger: auto
+    steps:
+      - step: build@gcc
+        name: probe_buildah
+        displayName: Check buildah and registry access
+        gccVersion: '10.3'
+        commands:
+          - |
+            set -eu
+            if sudo -n true 2>/dev/null; then S="sudo -n"; else S=""; fi
+            echo "user=$(id -un) sudo=${S:-none}"
+            $S apt-get update -qq
+            $S apt-get install -y --no-install-recommends buildah
+            buildah --version
+            curl -sS -o /dev/null -w "docker.io HTTP %{http_code}\n" \
+              --max-time 20 https://registry-1.docker.io/v2/ || true
+            curl -sS -o /dev/null -w "github HTTP %{http_code}\n" \
+              --max-time 20 https://api.github.com/ || true
+            printf 'FROM alpine:3.19\nRUN echo ok > /tmp/probe\n' > /tmp/Dockerfile.probe
+            $S buildah --storage-driver=vfs bud --isolation chroot \
+              -t probe:1 -f /tmp/Dockerfile.probe /tmp
+            $S buildah --storage-driver=vfs push probe:1 \
+              docker-archive:/tmp/probe.tar:probe:1
+            ls -lh /tmp/probe.tar
+            echo PROBE_OK

@@ -30,6 +30,8 @@ Each runs entirely on Gitee cloud resources: resolve the Zephyr version, pass a
 version-pinned Dockerfile to the native image-build plugin, push an intermediate
 image, then use Skopeo to export it without a Docker daemon and upload it to a
 Gitee Release. Existing GitHub workflows are unchanged.
+Preparation and publication commands are embedded in each YAML file; no external
+`ci` scripts are required. Commands explicitly enter `$WORKSPACE` before execution.
 
 Enable Gitee Go on the Gitee copy of this repository and import the three YAML
 pipelines. Add a Docker Registry credential in Gitee Go and configure these
