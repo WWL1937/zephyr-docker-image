@@ -64,7 +64,8 @@ jobs:
         run: |
           docker build \
             --secret id=gh_token,env=GH_TOKEN_SECRET \
-            -f Dockerfile.riscv \
+            -f Dockerfile \
+            --build-arg TOOLCHAIN=riscv64-zephyr-elf \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
             -t zephyr-sdk-riscv:${{ steps.zephyr.outputs.version }} .
 
@@ -94,4 +95,4 @@ jobs:
             Windows (PowerShell):
             Get-Content zephyr-sdk-riscv.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk-riscv.tar.gz -AsByteStream
           files: ./release-parts/zephyr-sdk-riscv.tar.gz.part*
-          make_latest: false
+          make_latest: true
