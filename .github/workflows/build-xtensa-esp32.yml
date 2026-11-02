@@ -64,7 +64,8 @@ jobs:
         run: |
           docker build \
             --secret id=gh_token,env=GH_TOKEN_SECRET \
-            -f Dockerfile.xtensa-esp32 \
+            -f Dockerfile \
+            --build-arg TOOLCHAIN=xtensa-espressif_esp32_zephyr-elf \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
             -t zephyr-sdk-xtensa-esp32:${{ steps.zephyr.outputs.version }} .
 
@@ -94,4 +95,4 @@ jobs:
             Windows (PowerShell):
             Get-Content zephyr-sdk-xtensa-esp32.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk-xtensa-esp32.tar.gz -AsByteStream
           files: ./release-parts/zephyr-sdk-xtensa-esp32.tar.gz.part*
-          make_latest: false
+          make_latest: true

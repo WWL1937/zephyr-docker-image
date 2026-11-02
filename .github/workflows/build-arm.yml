@@ -64,7 +64,8 @@ jobs:
         run: |
           docker build \
             --secret id=gh_token,env=GH_TOKEN_SECRET \
-            -f Dockerfile.arm \
+            -f Dockerfile \
+            --build-arg TOOLCHAIN=arm-zephyr-eabi \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
             -t zephyr-sdk-arm:${{ steps.zephyr.outputs.version }} .
 

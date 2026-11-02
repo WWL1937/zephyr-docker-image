@@ -13,9 +13,8 @@ RUN apt-get update && \
     /usr/share/locale/* /usr/share/i18n/* \
     /var/lib/apt/lists/* /var/cache/apt/*
 
-ARG HOST_UID=1000
 RUN userdel -r ubuntu 2>/dev/null || true && \
-    useradd -m -u ${HOST_UID} -s /bin/bash user && \
+    useradd -m -s /bin/bash user && \
     echo "root:root" | chpasswd && \
     echo "user:user" | chpasswd && \
     usermod -aG sudo user
@@ -24,9 +23,9 @@ RUN mkdir -p /run/sshd && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
 
-RUN mkdir -p /opt/zephyrproject /workspace && \
-    chown -R user:user /opt && \
-    chmod -R a+rwx /opt
+RUN mkdir -p /opt/zephyrproject /home/user/workspace && \
+    chown -R user:user /opt /home/user && \
+    chmod -R a+rwX /opt
 
 USER user
 
@@ -37,7 +36,7 @@ ENV PATH="/opt/zephyrproject/.venv/bin:$PATH"
 RUN python3 -m venv /opt/zephyrproject/.venv
 RUN pip install --no-cache-dir west
 
-ARG ZEPHYR_VERSION=v4.4.2
+ARG ZEPHYR_VERSION=v4.5.0
 RUN west init -m https://github.com/zephyrproject-rtos/zephyr --mr ${ZEPHYR_VERSION} /opt/zephyrproject
 WORKDIR /opt/zephyrproject
 RUN west update --narrow && \
@@ -49,16 +48,21 @@ RUN west packages pip --install && \
 
 WORKDIR /opt/zephyrproject/zephyr
 
+# Zephyr SDK toolchain: arm-zephyr-eabi, xtensa-espressif_esp32_zephyr-elf, riscv64-zephyr-elf
+ARG TOOLCHAIN=arm-zephyr-eabi
+
 # A GitHub token (if provided via --secret) raises the SDK release lookup's
 # API rate limit from 60 to 5000 requests/hour, avoiding spurious build failures.
 RUN --mount=type=secret,id=gh_token,mode=0444 \
     TOKEN_ARG=""; \
     if [ -s /run/secrets/gh_token ]; then TOKEN_ARG="--personal-access-token $(cat /run/secrets/gh_token)"; fi; \
-    yes | west sdk install -t xtensa-espressif_esp32_zephyr-elf -d /opt/zephyr-sdk $TOKEN_ARG && \
+    yes | west sdk install -t ${TOOLCHAIN} -d /opt/zephyr-sdk $TOKEN_ARG && \
     rm -rf /tmp/* ~/.cache/*
 
 USER root
+COPY entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 EXPOSE 22
-WORKDIR /workspace
+WORKDIR /home/user/workspace
 
-CMD ["sh", "-c", "if [ -n \"$USER_PASSWORD\" ]; then echo \"user:$USER_PASSWORD\" | chpasswd; fi && /usr/sbin/sshd -D"]
+ENTRYPOINT ["/entrypoint.sh"]
