@@ -48,7 +48,7 @@ RUN west packages pip --install && \
 
 WORKDIR /opt/zephyrproject/zephyr
 
-# Zephyr SDK toolchain: arm-zephyr-eabi, xtensa-espressif_esp32_zephyr-elf, riscv64-zephyr-elf
+
 ARG TOOLCHAIN=arm-zephyr-eabi
 
 # A GitHub token (if provided via --secret) raises the SDK release lookup's

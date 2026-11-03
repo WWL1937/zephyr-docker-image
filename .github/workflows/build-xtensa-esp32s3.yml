@@ -1,4 +1,4 @@
-name: Zephyr Docker Build (Xtensa ESP32)
+name: Zephyr Docker Build (Xtensa ESP32-S3)
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
             exit 1
           fi
           echo "version=${ZEPHYR_VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${ZEPHYR_VERSION}-xtensa-esp32" >> $GITHUB_OUTPUT
+          echo "tag=${ZEPHYR_VERSION}-xtensa-esp32s3" >> $GITHUB_OUTPUT
           echo "Latest Zephyr version: ${ZEPHYR_VERSION}"
 
       - name: Check if already built
@@ -65,17 +65,17 @@ jobs:
           docker build \
             --secret id=gh_token,env=GH_TOKEN_SECRET \
             -f Dockerfile \
-            --build-arg TOOLCHAIN=xtensa-espressif_esp32_zephyr-elf \
+            --build-arg TOOLCHAIN=xtensa-espressif_esp32s3_zephyr-elf \
             --build-arg ZEPHYR_VERSION=${{ steps.zephyr.outputs.version }} \
-            -t zephyr-sdk-xtensa-esp32:${{ steps.zephyr.outputs.version }} .
+            -t zephyr-sdk-xtensa-esp32s3:${{ steps.zephyr.outputs.version }} .
 
       - name: Export and split image
         if: steps.check.outputs.skip == 'false'
         run: |
           mkdir -p ./release-parts
-          docker save zephyr-sdk-xtensa-esp32:${{ steps.zephyr.outputs.version }} \
+          docker save zephyr-sdk-xtensa-esp32s3:${{ steps.zephyr.outputs.version }} \
             | gzip \
-            | split -b 1024m --numeric-suffixes=1 --suffix-length=1 - ./release-parts/zephyr-sdk-xtensa-esp32.tar.gz.part
+            | split -b 1024m --numeric-suffixes=1 --suffix-length=1 - ./release-parts/zephyr-sdk-xtensa-esp32s3.tar.gz.part
           ls -lh ./release-parts/
 
       - name: Create GitHub Release and upload artifact
@@ -83,16 +83,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.zephyr.outputs.tag }}
-          name: "Zephyr SDK Docker Image ${{ steps.zephyr.outputs.version }} (Xtensa ESP32)"
+          name: "Zephyr SDK Docker Image ${{ steps.zephyr.outputs.version }} (Xtensa ESP32-S3)"
           body: |
-            ## Zephyr Docker Image — ${{ steps.zephyr.outputs.version }} (Xtensa ESP32, `xtensa-espressif_esp32_zephyr-elf` toolchain)
+            ## Zephyr Docker Image — ${{ steps.zephyr.outputs.version }} (Xtensa ESP32-S3, `xtensa-espressif_esp32s3_zephyr-elf` toolchain)
 
-            > Download all `zephyr-sdk-xtensa-esp32.tar.gz.part*` files into the same directory, then merge them into a single archive before importing into Docker.
+            > Download all `zephyr-sdk-xtensa-esp32s3.tar.gz.part*` files into the same directory, then merge them into a single archive before importing into Docker.
 
             Linux / macOS:
-            cat zephyr-sdk-xtensa-esp32.tar.gz.part* > zephyr-sdk-xtensa-esp32.tar.gz
+            cat zephyr-sdk-xtensa-esp32s3.tar.gz.part* > zephyr-sdk-xtensa-esp32s3.tar.gz
 
             Windows (PowerShell):
-            Get-Content zephyr-sdk-xtensa-esp32.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk-xtensa-esp32.tar.gz -AsByteStream
-          files: ./release-parts/zephyr-sdk-xtensa-esp32.tar.gz.part*
+            Get-Content zephyr-sdk-xtensa-esp32s3.tar.gz.part* -AsByteStream | Set-Content zephyr-sdk-xtensa-esp32s3.tar.gz -AsByteStream
+          files: ./release-parts/zephyr-sdk-xtensa-esp32s3.tar.gz.part*
           make_latest: true
