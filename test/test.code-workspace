@@ -1,0 +1,28 @@
+{
+	"folders": [
+		{
+			"name": "test",
+			"path": "."
+		},
+		{
+			"name": "SDK",
+			"path": "../zephyrproject"
+		},
+		{
+			"name": "note",
+			"path": "../note"
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": true,
+			"**/.venv/": true,
+			"**/.west/": true,
+			"**/.github/": true,
+		},
+		"C_Cpp.default.compileCommands": "${workspaceFolder:test}/build/compile_commands.json",
+		"C_Cpp.intelliSenseEngine": "default",
+		"C_Cpp.intelliSenseCachePath": "${workspaceFolder:test}/.vscode/ipch",
+		"C_Cpp.errorSquiggles": "disabled",
+	}
+}
