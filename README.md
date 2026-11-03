@@ -4,11 +4,11 @@ This is a Docker image based on Ubuntu 24.04 with a complete [Zephyr RTOS](https
 
 Three variants are built from the same Dockerfile, each with its own workflow, differing only in the Zephyr SDK toolchain installed (build argument TOOLCHAIN):
 
-| Variant      | Workflow                                   | TOOLCHAIN build arg                 | Release tag            |
-| ------------ | ------------------------------------------ | ----------------------------------- | ---------------------- |
-| ARM          | .github/workflows/build-arm.yml            | arm-zephyr-eabi (default)           | VERSION-arm            |
-| Xtensa ESP32 | .github/workflows/build-xtensa-esp32.yml   | xtensa-espressif_esp32_zephyr-elf   | VERSION-xtensa-esp32   |
-| RISC-V       | .github/workflows/build-riscv.yml          | riscv64-zephyr-elf                  | VERSION-riscv          |
+| Variant         | Workflow                                   | TOOLCHAIN build arg                 | Release tag            |
+| --------------- | ------------------------------------------ | ----------------------------------- | ---------------------- |
+| ARM             | .github/workflows/build-arm.yml            | arm-zephyr-eabi (default)           | VERSION-arm            |
+| Xtensa ESP32-S3 | .github/workflows/build-xtensa-esp32s3.yml | xtensa-espressif_esp32s3_zephyr-elf | VERSION-xtensa-esp32s3 |
+| RISC-V          | .github/workflows/build-riscv.yml          | riscv64-zephyr-elf                  | VERSION-riscv          |
 
 Local build example: docker build --build-arg TOOLCHAIN=riscv64-zephyr-elf -t zephyr-sdk-riscv:v4.5.0 .
 
@@ -49,7 +49,7 @@ Do not let several containers share one host folder: the entrypoint changes the 
 
 ## Import from GitHub Release
 
-Each release contains the Docker image split into multiple 1 GB parts (artifact name depends on the variant, e.g. zephyr-sdk-arm.tar.gz.part*, zephyr-sdk-xtensa-esp32.tar.gz.part*, zephyr-sdk-riscv.tar.gz.part*). Download all parts for your chosen variant from the [Releases](../../releases) page into the same directory, then follow the steps below.
+Each release contains the Docker image split into multiple 1 GB parts (artifact name depends on the variant, e.g. zephyr-sdk-arm.tar.gz.part*, zephyr-sdk-xtensa-esp32s3.tar.gz.part*, zephyr-sdk-riscv.tar.gz.part*). Download all parts for your chosen variant from the [Releases](../../releases) page into the same directory, then follow the steps below.
 
 Linux / macOS
 
