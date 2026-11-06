@@ -42,14 +42,19 @@ WORKDIR /opt/zephyrproject
 RUN west update --narrow && \
     find /opt/zephyrproject -name '.git' -type d -exec rm -rf {} + 2>/dev/null || true
 
+# define defult value of TOOLCHAIN, this will be updated by outside
+ARG TOOLCHAIN=arm-zephyr-eabi
+
 RUN west packages pip --install && \
     pip cache purge 2>/dev/null || true && \
     west zephyr-export
 
+# west blobs needs jsonschema, installed by the pip step above
+RUN case "${TOOLCHAIN}" in \
+    *espressif*) west blobs fetch hal_espressif ;; \
+    esac
+
 WORKDIR /opt/zephyrproject/zephyr
-
-
-ARG TOOLCHAIN=arm-zephyr-eabi
 
 # A GitHub token (if provided via --secret) raises the SDK release lookup's
 # API rate limit from 60 to 5000 requests/hour, avoiding spurious build failures.
