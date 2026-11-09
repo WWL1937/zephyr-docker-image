@@ -80,6 +80,10 @@ services:
     volumes:
       - ${WORKSPACE_DIR:?set WORKSPACE_DIR in .env}:/home/user/workspace
       - /dev:/dev                       # expose host devices (serial, debug probes)
+          device_cgroup_rules:
+            - 'c 166:* rmw'   # ttyACM (USB CDC ACM serial)
+            - 'c 188:* rmw'   # ttyUSB (USB-to-serial adapters)
+            - 'c 189:* rmw'   # USB devices (/dev/bus/usb, debug probes)
     restart: unless-stopped
 ```
 

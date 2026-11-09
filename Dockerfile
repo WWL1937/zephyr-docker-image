@@ -17,7 +17,7 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd -m -s /bin/bash user && \
     echo "root:root" | chpasswd && \
     echo "user:user" | chpasswd && \
-    usermod -aG sudo user
+    usermod -aG sudo,dialout user
 
 RUN mkdir -p /run/sshd && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
