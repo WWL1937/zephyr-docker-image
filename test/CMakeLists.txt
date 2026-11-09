@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 set(BOARD nucleo_f103rb)                      # ARM: STM32
-# set(BOARD esp32c3_devkitm)                  # RISC-V: ESP32-C3
-# set(BOARD esp32s3_devkitm/esp32s3/procpu)   # Xtensa: ESP32-S3
+# set(BOARD esp32c3_devkitc)                  # RISC-V: ESP32-C3
+# set(BOARD esp32s3_devkitc/esp32s3/procpu)   # Xtensa: ESP32-S3
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(app_proj)
